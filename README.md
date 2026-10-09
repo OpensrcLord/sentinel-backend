@@ -68,6 +68,7 @@ Copy `.env.example` to `.env`; environment variables override file values. Use m
 | `REQUEST_TIMEOUT_SECONDS` | `8.0` | Outbound HTTP timeout. |
 | `OPERATION_SCAN_LIMIT` | `200` | Maximum recent operations examined (Horizon limit is 200). |
 | `ACTIVITY_WINDOW_DAYS` | `7` | Recent activity screening window. |
+| `RISK_POLICY_VERSION` | `1.0.0` | Semantic version returned with each screening result; bump when scoring semantics change. |
 | `EVENTS_LOOKBACK_LEDGERS` | `50000` | First-page event search window, clamped to RPC retention. |
 | `CORS_ORIGINS` | `http://localhost:3000` | Comma-separated browser origins allowed to call the API. |
 
@@ -76,3 +77,5 @@ Do not commit `.env`, account secrets, signing keys, or tokens. The current serv
 ## Data and scoring limits
 
 The score uses a bounded sample of recent Horizon operations, up to 200, and fixed baseline thresholds. It is not a trained model. RPC event history is provider-limited and is not a complete archive. Configure a persistent indexer for long-term event history.
+
+Screening responses include `scoring_policy_version`. Set `RISK_POLICY_VERSION` to a semantic version and bump it when scoring signal meaning or scoring rules change; operational configuration should label any customized policy with its own version.
