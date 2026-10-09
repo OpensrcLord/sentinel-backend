@@ -1,6 +1,7 @@
 """Read-only clients for Horizon and Stellar RPC."""
 from datetime import datetime, timedelta, timezone
 import base64
+import re
 
 import httpx
 from fastapi import HTTPException
@@ -159,13 +160,25 @@ def _native(value):
     return value
 
 
+def _bytes32_hex(value) -> str | None:
+    if isinstance(value, dict):
+        value = value.get("bytes")
+    if isinstance(value, str) and re.fullmatch(r"[0-9a-fA-F]{64}", value):
+        return value.lower()
+    return None
+
+
 def list_flag_events(limit: int, cursor: str | None = None, settings: Settings | None = None) -> dict:
     settings = settings or get_settings()
     if not settings.contract_id:
         raise HTTPException(status_code=503, detail="CONTRACT_ID is required to read Stellar Sentinel on-chain events")
     params = {
-        "filters": [{"type": "contract", "contractIds": [settings.contract_id],
-                     "topics": [[_symbol_scval("flagged"), "*", "*", "**"]]}],
+        "filters": [
+            {"type": "contract", "contractIds": [settings.contract_id],
+             "topics": [[_symbol_scval("flagged"), "*", "*", "**"]]},
+            {"type": "contract", "contractIds": [settings.contract_id],
+             "topics": [[_symbol_scval("flaggedv2"), "*", "*", "*"]]},
+        ],
         "pagination": {"limit": limit},
         "xdrFormat": "json",
     }
@@ -181,9 +194,11 @@ def list_flag_events(limit: int, cursor: str | None = None, settings: Settings |
     output = []
     for event in result.get("events", []):
         topics = [_native(topic) for topic in event.get("topic", event.get("topics", []))]
+        is_v2 = bool(topics) and topics[0] == "flaggedv2"
         output.append({"id": event.get("id"), "ledger": event.get("ledger"),
                        "created_at": event.get("ledgerClosedAt"), "agent": topics[1] if len(topics) > 1 else None,
                        "subject": topics[2] if len(topics) > 2 else None, "score": _native(event.get("value")),
+                       "report_digest": _bytes32_hex(topics[3]) if is_v2 and len(topics) > 3 else None,
                        "contract_id": event.get("contractId", settings.contract_id), "tx_hash": event.get("txHash")})
     return {"events": output, "next_cursor": result.get("cursor"),
             "source": {"rpc_url": settings.soroban_rpc_url, "network": settings.network_passphrase,
